@@ -1,0 +1,9 @@
+﻿export const INITIAL_CBOM = [
+  { id: "CR-01", system: "Website giao dịch", purpose: "Chứng thư số và TLS", algo: "RSA-2048", dataType: "Thông tin đăng nhập / giao dịch", retention: "5–10 năm", priority: "Cao", recommendation: "Lập kế hoạch thử nghiệm Hybrid PQC (6–12 tháng)", riskScore: 75 },
+  { id: "CR-02", system: "Kết nối HTTPS", purpose: "Trao đổi khóa TLS", algo: "ECDH P-256", dataType: "Dữ liệu truyền qua HTTPS", retention: "> 10 năm", priority: "Rất cao", recommendation: "ML-KEM / ML-DSA Hybrid PQC ngay (Nguy cơ HNDL cao)", riskScore: 95 },
+  { id: "CR-03", system: "Máy chủ API", purpose: "Xác thực dịch vụ và TLS", algo: "ECDSA P-256", dataType: "Yêu cầu API giao dịch", retention: "> 10 năm", priority: "Rất cao", recommendation: "ML-KEM / ML-DSA Hybrid PQC ngay (Nguy cơ HNDL cao)", riskScore: 95 },
+  { id: "CR-04", system: "Cơ sở dữ liệu khách hàng", purpose: "Mã hóa dữ liệu lưu trữ", algo: "AES-256-GCM", dataType: "Hồ sơ KYC / dữ liệu khách hàng", retention: "> 15 năm", priority: "Thấp", recommendation: "Giữ AES-256, rà soát quản lý khóa & Crypto Agility", riskScore: 20 },
+  { id: "CR-05", system: "Hệ thống đăng nhập", purpose: "Ký JWT / xác thực phiên", algo: "RSA-2048", dataType: "Token phiên / thông tin xác thực", retention: "< 24 giờ", priority: "Trung bình", recommendation: "Chuyển đổi PQC theo vòng đời nâng cấp hệ thống", riskScore: 50 },
+  { id: "CR-06", system: "Ký hoặc xác nhận giao dịch", purpose: "Chữ ký số lệnh thanh toán", algo: "ECDSA P-256", dataType: "Lệnh chuyển tiền", retention: "> 15 năm", priority: "Rất cao", recommendation: "ML-KEM / ML-DSA Hybrid PQC ngay (Nguy cơ HNDL cao)", riskScore: 95 },
+  { id: "CR-07", system: "Dịch vụ sao lưu dữ liệu", purpose: "Mã hóa bản sao lưu và bọc khóa", algo: "RSA-2048 + AES-256-GCM", dataType: "Sao kê / hồ sơ KYC", retention: "> 10 năm", priority: "Rất cao", recommendation: "ML-KEM / ML-DSA Hybrid PQC ngay (Nguy cơ HNDL cao)", riskScore: 95 },
+];
