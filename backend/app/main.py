@@ -1,4 +1,6 @@
-﻿import hashlib
+﻿import hmac
+import hashlib
+from datetime import datetime
 from typing import List
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +9,7 @@ from .schemas import (
     CbomItem, CbomEvaluateRequest, LabRequest, LabResponse, 
     HndlRequest, HndlResponse
 )
-from .services.rule_engine import compute_auto_risk
+from .services.rule_engine import compute_auto_risk, parse_retention_years
 from .services.crypto_lab import execute_pqc_benchmark, PQC_ALGORITHMS
 from .utils.cyclonedx import generate_cyclonedx_cbom
 
@@ -17,9 +19,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Sửa CORS đúng tiêu chuẩn W3C
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -51,69 +54,53 @@ def run_lab(req: LabRequest):
 
 @app.post("/api/hndl/simulate", response_model=HndlResponse)
 def simulate_hndl(req: HndlRequest):
-    import datetime
-    current_year = datetime.datetime.now().year
+    current_year = datetime.now().year
     y2q = req.y2qEstimate or 2030
     
-    # Parse retention years
-    retention_years = 0
-    if "> 15" in req.retention: retention_years = 20
-    elif "> 10" in req.retention: retention_years = 15
-    elif "5–10" in req.retention or "5-10" in req.retention: retention_years = 8
-    elif "< 24" in req.retention: retention_years = 0
-    
+    retention_years = parse_retention_years(req.retention)
     data_expiry_year = current_year + retention_years
-    exposure_start = max(current_year, y2q)
     
     payload = f"TXN_{req.assetId}|SYS:{req.system}|DATA:{req.dataType}"
+    
+    # Sử dụng HMAC-SHA256 giả lập MAC thay vì MD5
     cipher_hash = hashlib.sha256(payload.encode()).hexdigest().upper()[:32]
-    sig_hash = hashlib.md5(payload.encode()).hexdigest().upper()[:16]
+    sig_mac = hmac.new(b"pqc-secret-seed", payload.encode(), hashlib.sha256).hexdigest().upper()[:32]
     
     is_long_term = retention_years >= 10
-    is_hybrid = req.protectionMode == "hybrid"
+    is_hybrid = req.protectionMode.lower() == "hybrid"
     
-    # Calculate Exposure Window
-    if data_expiry_year > y2q and not is_hybrid:
-        exposure_window = f"{y2q} — {data_expiry_year} ({data_expiry_year - y2q} năm lộ lọt)"
-    else:
-        exposure_window = "Không có (An toàn)"
+    # Đồng bộ đánh giá từ rule_engine
+    migration_priority, pqc_recommendation, base_score = compute_auto_risk(req.algo, req.retention)
 
-    # 1. Determine Score and Base Status
     if is_hybrid:
-        hndl_score = 10 if is_long_term else 5
+        hndl_score = 10
         status_msg = "SECURE: Đã bảo vệ bằng Hybrid PQC."
         status_code = "SECURE"
-        migration_priority = "Hoàn thành"
-        pqc_recommendation = "Duy trì cấu hình Hybrid và thực hiện Crypto Agility."
-    elif is_long_term:
-        hndl_score = 98 if "Hồ sơ" in req.dataType or "Chữ ký" in req.dataType else 90
-        status_msg = "CRITICAL: Nguy cơ tàn phá từ HNDL."
-        status_code = "CRITICAL"
-        migration_priority = "Khẩn cấp"
-        pqc_recommendation = f"Nâng cấp lên ML-KEM-1024 (Lớp bảo mật cao nhất) ngay lập tức."
+        exposure_window = "Không có (An toàn)"
+        risk_explanation = "Dữ liệu được bảo vệ bằng lớp mã hóa kép. Bẻ gãy RSA/ECC không thể giải mã payload được bảo vệ bởi ML-KEM/ML-DSA."
+        legacy_analysis = "Bị giải mã khóa công khai truyền thống nhưng không mở được lớp PQC bọc ngoài."
     else:
-        hndl_score = 35
-        status_msg = "WARNING: Rủi ro thấp nhưng không được chủ quan."
-        status_code = "WARNING"
-        migration_priority = "Trung bình"
-        pqc_recommendation = "Lộ trình nâng cấp trong 12-24 tháng."
+        hndl_score = base_score
+        if data_expiry_year > y2q:
+            exposure_years = data_expiry_year - y2q
+            exposure_window = f"{y2q} — {data_expiry_year} ({exposure_years} năm lộ lọt)"
+            status_msg = "CRITICAL: Nguy cơ tàn phá từ tấn công HNDL."
+            status_code = "CRITICAL"
+            risk_explanation = f"Dữ liệu ('{req.dataType}') lưu trữ đến năm {data_expiry_year}. Dự kiến máy tính lượng tử bẻ khóa năm {y2q}, tạo cửa sổ lộ lọt {exposure_years} năm."
+            legacy_analysis = f"SỨC TÀN PHÁ CAO: Toàn bộ lưu lượng thu thập từ hiện tại sẽ bị giải mã khi đạt mốc Y2Q ({y2q})."
+        else:
+            exposure_window = "Không có (Dữ liệu hết hạn trước Y2Q)"
+            status_msg = "WARNING: Rủi ro trung bình, dữ liệu hết hạn trước Y2Q."
+            status_code = "WARNING"
+            risk_explanation = "Vòng đời dữ liệu ngắn hơn thời điểm dự kiến của Y2Q nhưng vẫn cần đề phòng lưu trữ metadata vĩnh viễn."
+            legacy_analysis = "Dữ liệu bị giải mã sau khi đã hết hạn sử dụng nghiệp vụ."
 
-    # 2. Risk Explanation
-    if is_hybrid:
-        risk_explanation = "Dữ liệu được bảo vệ bởi 2 lớp khóa. Kẻ tấn công bẻ được RSA/ECC vẫn bế tắc trước PQC."
-    elif is_long_term:
-        risk_explanation = f"Dữ liệu nhạy cảm ('{req.dataType}') có vòng đời đến năm {data_expiry_year}. Máy tính lượng tử (Y2Q) dự kiến xuất hiện năm {y2q}, tạo ra cửa sổ lộ lọt dài {data_expiry_year - y2q} năm."
-    else:
-        risk_explanation = "Vòng đời dữ liệu ngắn giúp hạn chế thiệt hại, nhưng kẻ tấn công vẫn có thể thu thập thông tin định danh."
-
-    # 3. Scenario Analysis
-    legacy_analysis = f"SỨC TÀN PHÁ CAO: Toàn bộ {req.dataType} từ năm {current_year} sẽ bị giải mã vào năm {y2q}. Hồ sơ nhạy cảm bị công khai." if is_long_term else f"THIỆT HẠI THẤP: Shor bẻ được khóa nhưng dữ liệu đã hết giá trị khai thác."
-    pqc_analysis = "KHÁNG LƯỢNG TỬ: Thuật toán dựa trên bài toán Lưới ngăn chặn hoàn toàn việc tính ngược khóa."
+    pqc_analysis = "KHÁNG LƯỢNG TỬ: Thuật toán mạng tinh thể (Lattice-based) vô hiệu hóa thuật toán Shor/Grover."
 
     return HndlResponse(
         payload=payload,
         cipherHash=cipher_hash,
-        sigHash=sig_hash,
+        sigHash=sig_mac,
         isLongTerm=is_long_term,
         statusMsg=status_msg,
         statusCode=status_code,

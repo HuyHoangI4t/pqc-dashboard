@@ -1,5 +1,4 @@
-﻿import hashlib
-import time
+﻿import uuid
 from datetime import datetime, timezone
 from typing import List
 from ..schemas import CbomItem
@@ -7,6 +6,22 @@ from ..schemas import CbomItem
 def generate_cyclonedx_cbom(items: List[CbomItem]) -> dict:
     components = []
     for item in items:
+        algo_u = item.algo.upper()
+        
+        # Xác định primitive và nist level sơ bộ theo chuẩn Crypto Extension
+        if any(k in algo_u for k in ["RSA", "ECDSA", "ECDH", "ECC"]):
+            primitive = "public-key"
+            quantum_level = 0
+        elif any(k in algo_u for k in ["ML-KEM", "ML-DSA", "SLH-DSA"]):
+            primitive = "pqc"
+            quantum_level = 3 if "768" in algo_u or "65" in algo_u else 5
+        elif "AES" in algo_u:
+            primitive = "symmetric"
+            quantum_level = 1 if "128" in algo_u else 5
+        else:
+            primitive = "other"
+            quantum_level = 0
+
         comp = {
             "type": "cryptographic-asset",
             "bom-ref": f"cbom-{item.id}",
@@ -15,9 +30,11 @@ def generate_cyclonedx_cbom(items: List[CbomItem]) -> dict:
             "cryptoProperties": {
                 "assetType": "algorithm",
                 "algorithmProperties": {
-                    "primitive": "public-key" if any(k in item.algo for k in ["RSA", "ECD"]) else "symmetric",
+                    "primitive": primitive,
                     "parameterSetIdentifier": item.algo,
-                    "executionEnvironment": "software-unspecified"
+                    "executionEnvironment": "software-unspecified",
+                    "cryptoFunctions": ["sign", "verify"] if "DSA" in algo_u or "RSA" in algo_u else ["encapsulate", "decapsulate"] if "KEM" in algo_u else ["encrypt", "decrypt"],
+                    "nistQuantumSecurityLevel": quantum_level
                 }
             },
             "properties": [
@@ -32,7 +49,7 @@ def generate_cyclonedx_cbom(items: List[CbomItem]) -> dict:
     return {
         "bomFormat": "CycloneDX",
         "specVersion": "1.6",
-        "serialNumber": "urn:uuid:" + hashlib.sha256(str(time.time()).encode()).hexdigest()[:36],
+        "serialNumber": f"urn:uuid:{uuid.uuid4()}",
         "version": 1,
         "metadata": {
             "timestamp": datetime.now(timezone.utc).isoformat(),
