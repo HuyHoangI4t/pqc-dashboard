@@ -2,12 +2,12 @@ import React from 'react';
 import { Atom, Database, ShieldAlert, FlaskConical, Network, Map } from 'lucide-react';
 
 const NAV_ITEMS = [
-  ['overview', Atom, 'Research brief', 'Cơ sở nghiên cứu'],
-  ['inventory', Database, 'Crypto inventory', 'Dữ liệu thử nghiệm'],
-  ['risk', ShieldAlert, 'Quantum exposure', 'Phân loại rủi ro'],
-  ['hndl', Network, 'HNDL simulator', 'Mô hình nguy cơ'],
-  ['lab', FlaskConical, 'PQC Research Lab', 'Thí nghiệm & so sánh'],
-  ['roadmap', Map, 'Migration roadmap', 'Kết quả chuyển đổi'],
+  ['overview', Atom, 'Research Brief', 'Tổng quan nghiên cứu'],
+  ['inventory', Database, 'Danh mục tài sản CBOM', 'Kiểm kê tài sản mật mã'],
+  ['risk', ShieldAlert, 'Đánh giá rủi ro lượng tử', 'Phân loại dữ liệu & rủi ro'],
+  ['hndl', Network, 'Mô phỏng HNDL', 'Thu thập trước, giải mã sau'],
+  ['lab', FlaskConical, 'PQC Research Lab', 'Thử nghiệm & so sánh PQC'],
+  ['roadmap', Map, 'Lộ trình chuyển đổi', 'Kế hoạch chuyển đổi 5 giai đoạn'],
 ];
 
 export default function Sidebar({ activeTab, setActiveTab }) {
