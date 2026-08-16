@@ -51,6 +51,7 @@ class HndlRequest(BaseModel):
     dataType: str
     retention: str
     protectionMode: str
+    y2qEstimate: Optional[int] = 2030 # Default Y2Q
 
 class HndlResponse(BaseModel):
     payload: str
@@ -65,3 +66,5 @@ class HndlResponse(BaseModel):
     riskExplanation: str
     pqcRecommendation: str
     migrationPriority: str
+    exposureWindow: str # Window where data is exposed
+    dataExpiryYear: int

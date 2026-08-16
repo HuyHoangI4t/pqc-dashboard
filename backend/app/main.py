@@ -51,44 +51,64 @@ def run_lab(req: LabRequest):
 
 @app.post("/api/hndl/simulate", response_model=HndlResponse)
 def simulate_hndl(req: HndlRequest):
+    import datetime
+    current_year = datetime.datetime.now().year
+    y2q = req.y2qEstimate or 2030
+    
+    # Parse retention years
+    retention_years = 0
+    if "> 15" in req.retention: retention_years = 20
+    elif "> 10" in req.retention: retention_years = 15
+    elif "5–10" in req.retention or "5-10" in req.retention: retention_years = 8
+    elif "< 24" in req.retention: retention_years = 0
+    
+    data_expiry_year = current_year + retention_years
+    exposure_start = max(current_year, y2q)
+    
     payload = f"TXN_{req.assetId}|SYS:{req.system}|DATA:{req.dataType}"
     cipher_hash = hashlib.sha256(payload.encode()).hexdigest().upper()[:32]
     sig_hash = hashlib.md5(payload.encode()).hexdigest().upper()[:16]
     
-    is_long_term = "> 10" in req.retention or "> 15" in req.retention or "5–10" in req.retention
+    is_long_term = retention_years >= 10
     is_hybrid = req.protectionMode == "hybrid"
     
+    # Calculate Exposure Window
+    if data_expiry_year > y2q and not is_hybrid:
+        exposure_window = f"{y2q} — {data_expiry_year} ({data_expiry_year - y2q} năm lộ lọt)"
+    else:
+        exposure_window = "Không có (An toàn)"
+
     # 1. Determine Score and Base Status
     if is_hybrid:
-        hndl_score = 15 if is_long_term else 5
-        status_msg = "SECURE: Đã kích hoạt Hybrid PQC, dữ liệu an toàn trước tấn công lượng tử."
+        hndl_score = 10 if is_long_term else 5
+        status_msg = "SECURE: Đã bảo vệ bằng Hybrid PQC."
         status_code = "SECURE"
         migration_priority = "Hoàn thành"
-        pqc_recommendation = "Duy trì cấu hình Hybrid hiện tại và giám sát hiệu năng."
+        pqc_recommendation = "Duy trì cấu hình Hybrid và thực hiện Crypto Agility."
     elif is_long_term:
-        hndl_score = 95
-        status_msg = "CRITICAL: Nguy cơ HNDL rất cao do thời hạn bảo vệ dài."
+        hndl_score = 98 if "Hồ sơ" in req.dataType or "Chữ ký" in req.dataType else 90
+        status_msg = "CRITICAL: Nguy cơ tàn phá từ HNDL."
         status_code = "CRITICAL"
-        migration_priority = "Rất cao"
-        pqc_recommendation = "Triển khai ML-KEM-768 Hybrid mode ngay lập tức."
+        migration_priority = "Khẩn cấp"
+        pqc_recommendation = f"Nâng cấp lên ML-KEM-1024 (Lớp bảo mật cao nhất) ngay lập tức."
     else:
         hndl_score = 35
-        status_msg = "WARNING: Dữ liệu vòng đời ngắn, rủi ro HNDL thấp nhưng vẫn cần nâng cấp."
+        status_msg = "WARNING: Rủi ro thấp nhưng không được chủ quan."
         status_code = "WARNING"
         migration_priority = "Trung bình"
-        pqc_recommendation = "Lên kế hoạch nâng cấp theo chu kỳ bảo trì hệ thống."
+        pqc_recommendation = "Lộ trình nâng cấp trong 12-24 tháng."
 
     # 2. Risk Explanation
     if is_hybrid:
-        risk_explanation = "Lớp bảo vệ Hybrid (Classical + PQC) đảm bảo ngay cả khi RSA/ECC bị bẻ gãy, kẻ tấn công vẫn không thể giải mã dữ liệu nhờ bài toán Lưới (Lattice-based cryptography)."
+        risk_explanation = "Dữ liệu được bảo vệ bởi 2 lớp khóa. Kẻ tấn công bẻ được RSA/ECC vẫn bế tắc trước PQC."
     elif is_long_term:
-        risk_explanation = "Dữ liệu nhạy cảm có thời hạn bảo vệ dài hơn thời điểm dự kiến xuất hiện máy tính lượng tử (Y2Q). Kẻ tấn công có thể lưu trữ bản mã RSA/ECC hôm nay và giải mã trong tương lai."
+        risk_explanation = f"Dữ liệu nhạy cảm ('{req.dataType}') có vòng đời đến năm {data_expiry_year}. Máy tính lượng tử (Y2Q) dự kiến xuất hiện năm {y2q}, tạo ra cửa sổ lộ lọt dài {data_expiry_year - y2q} năm."
     else:
-        risk_explanation = "Vòng đời dữ liệu ngắn giúp giảm thiểu tác động của HNDL, nhưng việc thiếu Crypto Agility vẫn là một điểm yếu hệ thống."
+        risk_explanation = "Vòng đời dữ liệu ngắn giúp hạn chế thiệt hại, nhưng kẻ tấn công vẫn có thể thu thập thông tin định danh."
 
     # 3. Scenario Analysis
-    legacy_analysis = f"BỊ GIẢI MÃ: Shor có thể tính ngược khóa từ {req.algo}." if is_long_term else f"ÍT ẢNH HƯỞNG: Shor bẻ được {req.algo} nhưng dữ liệu đã hết hạn."
-    pqc_analysis = "AN TOÀN: Đã bọc lớp PQC chống chịu máy tính lượng tử." if is_hybrid else "NGUY HIỂM: Hệ thống chưa có lớp bảo vệ hậu lượng tử."
+    legacy_analysis = f"SỨC TÀN PHÁ CAO: Toàn bộ {req.dataType} từ năm {current_year} sẽ bị giải mã vào năm {y2q}. Hồ sơ nhạy cảm bị công khai." if is_long_term else f"THIỆT HẠI THẤP: Shor bẻ được khóa nhưng dữ liệu đã hết giá trị khai thác."
+    pqc_analysis = "KHÁNG LƯỢNG TỬ: Thuật toán dựa trên bài toán Lưới ngăn chặn hoàn toàn việc tính ngược khóa."
 
     return HndlResponse(
         payload=payload,
@@ -102,7 +122,9 @@ def simulate_hndl(req: HndlRequest):
         hndlScore=hndl_score,
         riskExplanation=risk_explanation,
         pqcRecommendation=pqc_recommendation,
-        migrationPriority=migration_priority
+        migrationPriority=migration_priority,
+        exposureWindow=exposure_window,
+        dataExpiryYear=data_expiry_year
     )
 
 @app.post("/api/cbom/export-cyclonedx")

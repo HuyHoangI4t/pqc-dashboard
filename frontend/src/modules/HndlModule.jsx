@@ -5,6 +5,7 @@ export default function HndlModule({ cbom }) {
   const vulnerable = cbom.filter((item) => /RSA|ECD/.test(item.algo));
   const [asset, setAsset] = useState(vulnerable[0] || cbom[0]);
   const [mode, setMode] = useState('legacy');
+  const [y2q, setY2q] = useState(2030);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -12,7 +13,7 @@ export default function HndlModule({ cbom }) {
     if (!asset) return;
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/hndl/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assetId: asset.id, system: asset.system, algo: asset.algo, dataType: asset.dataType, retention: asset.retention, protectionMode: mode }) });
+      const response = await fetch('http://localhost:8000/api/hndl/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assetId: asset.id, system: asset.system, algo: asset.algo, dataType: asset.dataType, retention: asset.retention, protectionMode: mode, y2qEstimate: y2q }) });
       if (!response.ok) throw new Error('Simulation failed');
       setResult(await response.json());
     } catch (error) { console.error(error); } finally { setLoading(false); }
@@ -51,10 +52,10 @@ export default function HndlModule({ cbom }) {
       </div>
     </div>
 
-    <div className="grid md:grid-cols-2 gap-4">
+    <div className="grid md:grid-cols-3 gap-4">
       <label className="text-xs font-semibold text-slate-500">Mục tiêu bị thu thập
         <select value={asset?.id ?? ''} onChange={(event) => setAsset(cbom.find((item) => item.id === event.target.value))} className="mt-2 w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm text-slate-700">
-          {vulnerable.map((item) => <option key={item.id} value={item.id}>{item.id} — {item.system} ({item.algo})</option>)}
+          {cbom.filter((item) => /RSA|ECD/.test(item.algo)).map((item) => <option key={item.id} value={item.id}>{item.id} — {item.system} ({item.algo})</option>)}
         </select>
       </label>
       <label className="text-xs font-semibold text-slate-500">Cơ chế bảo vệ
@@ -62,6 +63,9 @@ export default function HndlModule({ cbom }) {
           <option value="legacy">Hiện tại: RSA / ECC</option>
           <option value="hybrid">Nâng cấp: Classical + ML-KEM (Hybrid)</option>
         </select>
+      </label>
+      <label className="text-xs font-semibold text-slate-500">Dự kiến máy tính lượng tử (Y2Q)
+        <input type="number" value={y2q} onChange={(e) => setY2q(parseInt(e.target.value))} className="mt-2 w-full border border-slate-200 bg-slate-50 rounded-xl p-2.5 text-sm text-slate-700" />
       </label>
     </div>
 
@@ -71,17 +75,21 @@ export default function HndlModule({ cbom }) {
 
     {result && <div className="border-t border-slate-200 pt-6 space-y-6">
       {/* ③ Kết quả tự động */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white border border-slate-200 p-3 rounded-xl text-center">
           <p className="text-[10px] font-bold text-slate-400 uppercase">HNDL Score</p>
           <p className={`text-xl font-black mt-1 ${result.hndlScore > 70 ? 'text-rose-600' : 'text-emerald-600'}`}>{result.hndlScore}</p>
         </div>
         <div className="bg-white border border-slate-200 p-3 rounded-xl text-center">
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Priority</p>
-          <p className="text-sm font-bold text-slate-700 mt-1">{result.migrationPriority}</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase">Hết hạn dữ liệu</p>
+          <p className="text-sm font-bold text-slate-700 mt-1">{result.dataExpiryYear}</p>
+        </div>
+        <div className="bg-white border border-slate-200 p-3 rounded-xl text-center">
+          <p className="text-[10px] font-bold text-slate-400 uppercase">Cửa sổ lộ lọt</p>
+          <p className="text-sm font-bold text-rose-600 mt-1">{result.exposureWindow}</p>
         </div>
         <div className="bg-white border border-slate-200 p-3 rounded-xl text-center col-span-2">
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Recommendation</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase">Khuyến nghị</p>
           <p className="text-[11px] font-medium text-cyan-700 mt-1 italic">{result.pqcRecommendation}</p>
         </div>
       </div>
