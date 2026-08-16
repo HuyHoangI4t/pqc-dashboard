@@ -61,3 +61,7 @@ class HndlResponse(BaseModel):
     statusCode: str
     legacyAnalysis: str
     pqcAnalysis: str
+    hndlScore: int
+    riskExplanation: str
+    pqcRecommendation: str
+    migrationPriority: str

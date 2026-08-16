@@ -56,17 +56,39 @@ def simulate_hndl(req: HndlRequest):
     sig_hash = hashlib.md5(payload.encode()).hexdigest().upper()[:16]
     
     is_long_term = "> 10" in req.retention or "> 15" in req.retention or "5–10" in req.retention
+    is_hybrid = req.protectionMode == "hybrid"
     
-    if is_long_term:
-        status_msg = "CRITICAL: Bản mã có thời hạn dài, bị đối phương thu thập đóng băng chờ Lượng tử."
+    # 1. Determine Score and Base Status
+    if is_hybrid:
+        hndl_score = 15 if is_long_term else 5
+        status_msg = "SECURE: Đã kích hoạt Hybrid PQC, dữ liệu an toàn trước tấn công lượng tử."
+        status_code = "SECURE"
+        migration_priority = "Hoàn thành"
+        pqc_recommendation = "Duy trì cấu hình Hybrid hiện tại và giám sát hiệu năng."
+    elif is_long_term:
+        hndl_score = 95
+        status_msg = "CRITICAL: Nguy cơ HNDL rất cao do thời hạn bảo vệ dài."
         status_code = "CRITICAL"
-        legacy_analysis = f"BỊ GIẢI MÃ HOÀN TOÀN: Thuật toán Shor tính ngược khóa riêng từ {req.algo}. Dữ liệu {req.retention} bị rò rỉ."
+        migration_priority = "Rất cao"
+        pqc_recommendation = "Triển khai ML-KEM-768 Hybrid mode ngay lập tức."
     else:
-        status_msg = "LOW RISK: Dữ liệu vòng đời ngắn (<24h), không phải mục tiêu chính của HNDL."
-        status_code = "LOW_RISK"
-        legacy_analysis = f"ÍT ẢNH HƯỞNG: Shor bẻ được {req.algo} nhưng dữ liệu chỉ có hạn {req.retention}, Token/Session đã hết hạn từ lâu."
+        hndl_score = 35
+        status_msg = "WARNING: Dữ liệu vòng đời ngắn, rủi ro HNDL thấp nhưng vẫn cần nâng cấp."
+        status_code = "WARNING"
+        migration_priority = "Trung bình"
+        pqc_recommendation = "Lên kế hoạch nâng cấp theo chu kỳ bảo trì hệ thống."
 
-    pqc_analysis = "AN TOÀN TUYỆT ĐỐI: Lớp bọc PQC (ML-KEM/ML-DSA) dựa trên bài toán Lưới chống chịu vững vàng trước Shor." if req.protectionMode == "hybrid" else "Chưa bật cơ chế Hybrid PQC."
+    # 2. Risk Explanation
+    if is_hybrid:
+        risk_explanation = "Lớp bảo vệ Hybrid (Classical + PQC) đảm bảo ngay cả khi RSA/ECC bị bẻ gãy, kẻ tấn công vẫn không thể giải mã dữ liệu nhờ bài toán Lưới (Lattice-based cryptography)."
+    elif is_long_term:
+        risk_explanation = "Dữ liệu nhạy cảm có thời hạn bảo vệ dài hơn thời điểm dự kiến xuất hiện máy tính lượng tử (Y2Q). Kẻ tấn công có thể lưu trữ bản mã RSA/ECC hôm nay và giải mã trong tương lai."
+    else:
+        risk_explanation = "Vòng đời dữ liệu ngắn giúp giảm thiểu tác động của HNDL, nhưng việc thiếu Crypto Agility vẫn là một điểm yếu hệ thống."
+
+    # 3. Scenario Analysis
+    legacy_analysis = f"BỊ GIẢI MÃ: Shor có thể tính ngược khóa từ {req.algo}." if is_long_term else f"ÍT ẢNH HƯỞNG: Shor bẻ được {req.algo} nhưng dữ liệu đã hết hạn."
+    pqc_analysis = "AN TOÀN: Đã bọc lớp PQC chống chịu máy tính lượng tử." if is_hybrid else "NGUY HIỂM: Hệ thống chưa có lớp bảo vệ hậu lượng tử."
 
     return HndlResponse(
         payload=payload,
@@ -76,7 +98,11 @@ def simulate_hndl(req: HndlRequest):
         statusMsg=status_msg,
         statusCode=status_code,
         legacyAnalysis=legacy_analysis,
-        pqcAnalysis=pqc_analysis
+        pqcAnalysis=pqc_analysis,
+        hndlScore=hndl_score,
+        riskExplanation=risk_explanation,
+        pqcRecommendation=pqc_recommendation,
+        migrationPriority=migration_priority
     )
 
 @app.post("/api/cbom/export-cyclonedx")
