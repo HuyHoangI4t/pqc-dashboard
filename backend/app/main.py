@@ -83,10 +83,10 @@ def simulate_hndl(req: HndlRequest):
         hndl_score = base_score
         if data_expiry_year > y2q:
             exposure_years = data_expiry_year - y2q
-            exposure_window = f"{y2q} — {data_expiry_year} ({exposure_years} năm lộ lọt)"
+            exposure_window = f"{exposure_years} năm"
             status_msg = "CRITICAL: Nguy cơ tàn phá từ tấn công HNDL."
             status_code = "CRITICAL"
-            risk_explanation = f"Dữ liệu ('{req.dataType}') lưu trữ đến năm {data_expiry_year}. Dự kiến máy tính lượng tử bẻ khóa năm {y2q}, tạo cửa sổ lộ lọt {exposure_years} năm."
+            risk_explanation = f"Dữ liệu ('{req.dataType}') lưu trữ đến năm {data_expiry_year}. Dự kiến máy tính lượng tử bẻ khóa năm {y2q}, thời hạn bị rò rỉ {exposure_years} năm."
             legacy_analysis = f"SỨC TÀN PHÁ CAO: Toàn bộ lưu lượng thu thập từ hiện tại sẽ bị giải mã khi đạt mốc Y2Q ({y2q})."
         else:
             exposure_window = "Không có (Dữ liệu hết hạn trước Y2Q)"

@@ -85,7 +85,7 @@ export default function HndlModule({ cbom }) {
           <p className="text-sm font-bold text-slate-700 mt-1">{result.dataExpiryYear}</p>
         </div>
         <div className="bg-white border border-slate-200 p-3 rounded-xl text-center">
-          <p className="text-[10px] font-bold text-slate-400 uppercase">Cửa sổ lộ lọt</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase">Exposure Window</p>
           <p className="text-sm font-bold text-rose-600 mt-1">{result.exposureWindow}</p>
         </div>
         <div className="bg-white border border-slate-200 p-3 rounded-xl text-center col-span-2">
